@@ -157,7 +157,7 @@ class HierarchicalClassifier(abc.ABC):
 
         if not self.bert:
             self.X_, self.y_ = self._validate_data(
-                X, y, multi_output=True, accept_sparse="csr", allow_nd=True
+                X, y, multi_output=True, accept_sparse="csr", allow_nd=True, force_all_finite = not self.local_classifier._get_tags()["allow_nan"]
             )
         else:
             self.X_ = np.array(X)
