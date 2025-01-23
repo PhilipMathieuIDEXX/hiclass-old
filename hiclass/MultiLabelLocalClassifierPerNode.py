@@ -19,6 +19,7 @@ from hiclass.MultiLabelHierarchicalClassifier import (
 
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_is_fitted
+from sklearn.model_selection import GridSearchCV
 
 # monkeypatching check_array to accept 3 dimensional arrays
 import sklearn.utils.validation
@@ -58,6 +59,7 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         replace_classifiers: bool = True,
         n_jobs: int = 1,
         bert: bool = False,
+        cv_kwargs: dict = {},
     ):
         r"""
         Initialize a local classifier per node.
@@ -95,6 +97,8 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
             If :code:`Ray` is installed it is used, otherwise it defaults to :code:`Joblib`.
         bert : bool, default=False
             If True, skip scikit-learn's checks and sample_weight passing for BERT.
+        cv_kwargs : dict, default={}
+            Parameters to pass to scikit-learn's GridSearchCV.
         """
         super().__init__(
             local_classifier=local_classifier,
@@ -107,6 +111,7 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         )
         self.binary_policy = binary_policy
         self.tolerance = tolerance
+        self.cv_kwargs = cv_kwargs
 
     def fit(self, X, y, sample_weight=None):
         """
@@ -279,6 +284,8 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
                 local_classifiers[node] = {
                     "classifier": deepcopy(self.local_classifier_)
                 }
+                if self.cv_kwargs != {}:
+                    local_classifiers[node]["cv_kwargs"] = deepcopy(self.cv_kwargs)
         nx.set_node_attributes(self.hierarchy_, local_classifiers)
 
     def _fit_digraph(self, local_mode: bool = False, use_joblib: bool = False):
@@ -295,13 +302,22 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         unique_y = np.unique(y)
         if len(unique_y) == 1 and self.replace_classifiers:
             classifier = ConstantClassifier()
-        if not self.bert:
-            try:
-                classifier.fit(X, y, sample_weight)
-            except TypeError:
-                classifier.fit(X, y)
         else:
-            classifier.fit(X, y)
+            if "cv_kwargs" in self.hierarchy_.nodes[node]:
+                cv_kwargs = self.hierarchy_.nodes[node]["cv_kwargs"]
+                grid = GridSearchCV(classifier, **cv_kwargs)
+                try:
+                    grid.fit(X, y, sample_weight)
+                except TypeError:
+                    grid.fit(X, y)
+                classifier = grid.best_estimator_
+            if not self.bert:
+                try:
+                    classifier.fit(X, y, sample_weight)
+                except TypeError:
+                    classifier.fit(X, y)
+            else:
+                classifier.fit(X, y)
         return classifier
 
     def _clean_up(self):
