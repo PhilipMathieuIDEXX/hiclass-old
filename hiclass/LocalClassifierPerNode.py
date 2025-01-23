@@ -13,6 +13,7 @@ import networkx as nx
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_array, check_is_fitted
+from sklearn.model_selection import GridSearchCV
 
 from hiclass import BinaryPolicy
 from hiclass.ConstantClassifier import ConstantClassifier
@@ -58,6 +59,7 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
         return_all_probabilities: bool = False,
         probability_combiner: str = "multiply",
         tmp_dir: str = None,
+        cv_kwargs: dict = {},
     ):
         """
         Initialize a local classifier per node.
@@ -106,6 +108,8 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
         tmp_dir : str, default=None
             Temporary directory to persist local classifiers that are trained. If the job needs to be restarted,
             it will skip the pre-trained local classifier found in the temporary directory.
+        cv_kwargs : dict, default={}
+            Parameters to pass to scikit-learn's GridSearchCV.
         """
         super().__init__(
             local_classifier=local_classifier,
@@ -121,6 +125,7 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
         self.binary_policy = binary_policy
         self.return_all_probabilities = return_all_probabilities
         self.probability_combiner = probability_combiner
+        self.cv_kwargs = cv_kwargs
 
         if (
             self.probability_combiner
@@ -380,6 +385,8 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
                 local_classifiers[node] = {
                     "classifier": deepcopy(self.local_classifier_)
                 }
+                if self.cv_kwargs != {}:
+                    local_classifiers[node]["cv_kwargs"] = deepcopy(self.cv_kwargs)
         nx.set_node_attributes(self.hierarchy_, local_classifiers)
 
     def _initialize_local_calibrators(self):
@@ -430,11 +437,21 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
         if len(unique_y) == 1 and self.replace_classifiers:
             self.logger_.info("adding constant classifier")
             classifier = ConstantClassifier()
-        if not self.bert:
-            try:
-                classifier.fit(X, y, sample_weight)
-            except TypeError:
-                classifier.fit(X, y)
+            classifier.fit(X, y)
+        elif not self.bert:
+            if "cv_kwargs" in self.hierarchy_.nodes[node]:
+                cv_kwargs = self.hierarchy_.nodes[node]["cv_kwargs"]
+                grid = GridSearchCV(classifier, **cv_kwargs)
+                try:
+                    grid.fit(X, y, sample_weight)
+                except TypeError:
+                    grid.fit(X, y)
+                classifier = grid.best_estimator_
+            else:
+                try:
+                    classifier.fit(X, y, sample_weight)
+                except TypeError:
+                    classifier.fit(X, y)
         else:
             classifier.fit(X, y)
         self._save_tmp(node, classifier)

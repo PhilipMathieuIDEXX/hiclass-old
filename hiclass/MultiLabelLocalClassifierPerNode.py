@@ -301,8 +301,10 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         X, y, sample_weight = self.binary_policy_.get_binary_examples(node)
         unique_y = np.unique(y)
         if len(unique_y) == 1 and self.replace_classifiers:
+            self.logger_.info("adding constant classifier")
             classifier = ConstantClassifier()
-        else:
+            classifier.fit(X, y)
+        elif not self.bert:
             if "cv_kwargs" in self.hierarchy_.nodes[node]:
                 cv_kwargs = self.hierarchy_.nodes[node]["cv_kwargs"]
                 grid = GridSearchCV(classifier, **cv_kwargs)
@@ -311,13 +313,13 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
                 except TypeError:
                     grid.fit(X, y)
                 classifier = grid.best_estimator_
-            if not self.bert:
+            else:
                 try:
                     classifier.fit(X, y, sample_weight)
                 except TypeError:
                     classifier.fit(X, y)
-            else:
-                classifier.fit(X, y)
+        else:
+            classifier.fit(X, y)
         return classifier
 
     def _clean_up(self):
