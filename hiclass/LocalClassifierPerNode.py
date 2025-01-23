@@ -48,7 +48,7 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
 
     def __sklearn_tags__(self):
         tags = super().__sklearn_tags__()
-        tags.input_tags.allow_nan = self.local_classifier.__sklearn_tags__().input_tags.allow_nan
+        tags.input_tags.allow_nan = self.local_classifier._get_tags["allow_nan"]
         return tags
 
     def __init__(
