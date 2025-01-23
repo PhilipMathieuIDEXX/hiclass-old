@@ -46,10 +46,12 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
        ['2', '2.1']])
     """
 
-    def __sklearn_tags__(self):
-        tags = super().__sklearn_tags__()
-        tags.input_tags.allow_nan = self.local_classifier._get_tags()["allow_nan"]
-        return tags
+    def _more_tags(self):
+        # NOTE: This function will need to be updated to the new tag interface (__sklearn_tags__) for scikit-learn >1.4
+        print(self.local_classifier._get_tags()["allow_nan"])
+        return {
+            "allow_nan": self.local_classifier._get_tags()["allow_nan"],
+        }
 
     def __init__(
         self,
