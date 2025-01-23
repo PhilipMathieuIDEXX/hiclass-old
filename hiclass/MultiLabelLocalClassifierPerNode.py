@@ -49,6 +49,11 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
        [['2', '2.1']]])
     """
 
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.input_tags.allow_nan = self.local_classifier.__sklearn_tags__().input_tags.allow_nan
+        return tags
+
     def __init__(
         self,
         local_classifier: BaseEstimator = None,
