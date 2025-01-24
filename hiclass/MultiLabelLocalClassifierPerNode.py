@@ -187,7 +187,7 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         # Input validation
         if not self.bert:
             X = sklearn.utils.validation.check_array(
-                X, accept_sparse="csr", force_all_finite = not self._get_tags()['allow_nan'])
+                X, accept_sparse="csr", force_all_finite = not self._get_tags()['allow_nan']
             )  # TODO: Decide allow_nd True or False
         else:
             X = np.array(X)
