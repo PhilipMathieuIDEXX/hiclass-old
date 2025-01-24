@@ -309,8 +309,7 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         if len(unique_y) == 1 and self.replace_classifiers:
             self.logger_.info("adding constant classifier")
             classifier = ConstantClassifier()
-            classifier.fit(X, y)
-        elif not self.bert:
+        if not self.bert:
             if "cv_kwargs" in self.hierarchy_.nodes[node]:
                 cv_kwargs = self.hierarchy_.nodes[node]["cv_kwargs"]
                 grid = GridSearchCV(classifier, **cv_kwargs)
