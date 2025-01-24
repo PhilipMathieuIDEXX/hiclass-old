@@ -48,7 +48,6 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
 
     def _more_tags(self):
         # NOTE: This function will need to be updated to the new tag interface (__sklearn_tags__) for scikit-learn >1.4
-        print(self.local_classifier._get_tags()["allow_nan"])
         return {
             "allow_nan": self.local_classifier._get_tags()["allow_nan"],
         }
@@ -203,7 +202,7 @@ class LocalClassifierPerNode(BaseEstimator, HierarchicalClassifier):
 
         # Input validation
         if not self.bert:
-            X = check_array(X, accept_sparse="csr", allow_nd=True, ensure_2d=False)
+            X = check_array(X, accept_sparse="csr", allow_nd=True, ensure_2d=False, force_all_finite = not self._get_tags()['allow_nan'])
         else:
             X = np.array(X)
 

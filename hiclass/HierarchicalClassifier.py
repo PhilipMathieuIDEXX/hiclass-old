@@ -157,12 +157,12 @@ class HierarchicalClassifier(abc.ABC):
 
         if not self.bert:
             self.X_, self.y_ = self._validate_data(
-                X, y, multi_output=True, accept_sparse="csr", allow_nd=True, force_all_finite = not self.local_classifier._get_tags()["allow_nan"]
+                X, make_leveled(y), multi_output=True, accept_sparse="csr", allow_nd=True, force_all_finite = not self._get_tags()["allow_nan"]
             )
         else:
             self.X_ = np.array(X)
             self.y_ = check_array(
-                make_leveled(y), dtype=None, ensure_2d=False, allow_nd=True
+                make_leveled(y), dtype=None, ensure_2d=False, allow_nd=True, force_all_finite = not self._get_tags()["allow_nan"]
             )
 
         if sample_weight is not None:
@@ -266,7 +266,7 @@ class HierarchicalClassifier(abc.ABC):
 
         # Input validation
         if not self.bert:
-            X = check_array(X, accept_sparse="csr", allow_nd=True, ensure_2d=False)
+            X = check_array(X, accept_sparse="csr", allow_nd=True, ensure_2d=False, force_all_finite = not self._get_tags()["allow_nan"])
         else:
             X = np.array(X)
 

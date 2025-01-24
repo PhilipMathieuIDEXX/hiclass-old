@@ -51,7 +51,6 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
 
     def _more_tags(self):
         # NOTE: This function will need to be updated to the new tag interface (__sklearn_tags__) for scikit-learn >1.4
-        print(self.local_classifier._get_tags()["allow_nan"])
         return {
             "allow_nan": self.local_classifier._get_tags()["allow_nan"],
         }
@@ -188,7 +187,7 @@ class MultiLabelLocalClassifierPerNode(BaseEstimator, MultiLabelHierarchicalClas
         # Input validation
         if not self.bert:
             X = sklearn.utils.validation.check_array(
-                X, accept_sparse="csr"
+                X, accept_sparse="csr", force_all_finite = not self._get_tags()['allow_nan'])
             )  # TODO: Decide allow_nd True or False
         else:
             X = np.array(X)
