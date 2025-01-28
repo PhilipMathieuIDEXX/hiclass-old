@@ -13,6 +13,7 @@ from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.validation import _check_sample_weight
 from sklearn.utils.validation import check_array, check_is_fitted
+from tqdm.autonotebook import tqdm
 
 from hiclass.probability_combiner import (
     GeometricMeanCombiner,
@@ -157,12 +158,21 @@ class HierarchicalClassifier(abc.ABC):
 
         if not self.bert:
             self.X_, self.y_ = self._validate_data(
-                X, make_leveled(y), multi_output=True, accept_sparse="csr", allow_nd=True, force_all_finite = not self._get_tags()["allow_nan"]
+                X,
+                make_leveled(y),
+                multi_output=True,
+                accept_sparse="csr",
+                allow_nd=True,
+                force_all_finite=not self._get_tags()["allow_nan"],
             )
         else:
             self.X_ = np.array(X)
             self.y_ = check_array(
-                make_leveled(y), dtype=None, ensure_2d=False, allow_nd=True, force_all_finite = not self._get_tags()["allow_nan"]
+                make_leveled(y),
+                dtype=None,
+                ensure_2d=False,
+                allow_nd=True,
+                force_all_finite=not self._get_tags()["allow_nan"],
             )
 
         if sample_weight is not None:
@@ -266,7 +276,13 @@ class HierarchicalClassifier(abc.ABC):
 
         # Input validation
         if not self.bert:
-            X = check_array(X, accept_sparse="csr", allow_nd=True, ensure_2d=False, force_all_finite = not self._get_tags()["allow_nan"])
+            X = check_array(
+                X,
+                accept_sparse="csr",
+                allow_nd=True,
+                ensure_2d=False,
+                force_all_finite=not self._get_tags()["allow_nan"],
+            )
         else:
             X = np.array(X)
 
@@ -444,9 +460,11 @@ class HierarchicalClassifier(abc.ABC):
     def _fit_node_classifier(
         self, nodes, local_mode: bool = False, use_joblib: bool = False
     ):
-        def logging_wrapper(func, idx, node, node_length):
+        def logging_wrapper(func, idx, node, node_length, pbar):
             self.logger_.info(f"fitting node {idx + 1}/{node_length}: {str(node)}")
-            return func(self, node)
+            result = func(self, node)
+            pbar.update(1)
+            return result
 
         if self.n_jobs > 1:
             if _has_ray and not use_joblib:
@@ -460,21 +478,23 @@ class HierarchicalClassifier(abc.ABC):
                 _parallel_fit = ray.remote(
                     self._fit_classifier
                 )  # TODO: use logging wrapper
-                results = [_parallel_fit.remote(lcppn, node) for node in nodes]
-                classifiers = ray.get(results)
+                with tqdm(total=len(nodes), desc="Fitting nodes") as pbar:
+                    results = [_parallel_fit.remote(lcppn, node) for node in nodes]
+                    classifiers = ray.get(results)
             else:
-                classifiers = Parallel(n_jobs=self.n_jobs)(
-                    delayed(logging_wrapper)(
-                        self._fit_classifier, idx, node, len(nodes)
+                with tqdm(total=len(nodes), desc="Fitting nodes") as pbar:
+                    classifiers = Parallel(n_jobs=self.n_jobs)(
+                        delayed(logging_wrapper)(
+                            self._fit_classifier, idx, node, len(nodes), pbar
+                        )
+                        for idx, node in enumerate(nodes)
                     )
-                    for idx, node in enumerate(nodes)
-                )
-
         else:
-            classifiers = [
-                logging_wrapper(self._fit_classifier, idx, node, len(nodes))
-                for idx, node in enumerate(nodes)
-            ]
+            with tqdm(total=len(nodes), desc="Fitting nodes") as pbar:
+                classifiers = [
+                    logging_wrapper(self._fit_classifier, idx, node, len(nodes), pbar)
+                    for idx, node in enumerate(nodes)
+                ]
 
         for classifier, node in zip(classifiers, nodes):
             self.hierarchy_.nodes[node]["classifier"] = classifier
@@ -482,9 +502,11 @@ class HierarchicalClassifier(abc.ABC):
     def _fit_node_calibrator(
         self, nodes, local_mode: bool = False, use_joblib: bool = False
     ):
-        def logging_wrapper(func, idx, node, node_length):
+        def logging_wrapper(func, idx, node, node_length, pbar):
             self.logger_.info(f"calibrating node {idx + 1}/{node_length}: {str(node)}")
-            return func(self, node)
+            result = func(self, node)
+            pbar.update(1)
+            return result
 
         if self.n_jobs > 1:
             if _has_ray and not use_joblib:
@@ -496,24 +518,29 @@ class HierarchicalClassifier(abc.ABC):
                     )
                 lcppn = ray.put(self)
                 _parallel_fit = ray.remote(self._fit_calibrator)
-                results = [
-                    _parallel_fit.remote(lcppn, node) for idx, node in enumerate(nodes)
-                ]  # TODO: use logging wrapper
-                calibrators = ray.get(results)
+                with tqdm(total=len(nodes), desc="Calibrating nodes") as pbar:
+                    results = [
+                        _parallel_fit.remote(lcppn, node)
+                        for idx, node in enumerate(nodes)
+                    ]  # TODO: use logging wrapper
+                    calibrators = ray.get(results)
+                    pbar.update(len(nodes))
                 ray.shutdown()
             else:
-                calibrators = Parallel(n_jobs=self.n_jobs)(
-                    delayed(logging_wrapper)(
-                        self._fit_calibrator, idx, node, len(nodes)
+                with tqdm(total=len(nodes), desc="Calibrating nodes") as pbar:
+                    calibrators = Parallel(n_jobs=self.n_jobs)(
+                        delayed(logging_wrapper)(
+                            self._fit_calibrator, idx, node, len(nodes), pbar
+                        )
+                        for idx, node in enumerate(nodes)
                     )
-                    for idx, node in enumerate(nodes)
-                )
 
         else:
-            calibrators = [
-                logging_wrapper(self._fit_calibrator, idx, node, len(nodes))
-                for idx, node in enumerate(nodes)
-            ]
+            with tqdm(total=len(nodes), desc="Calibrating nodes") as pbar:
+                calibrators = [
+                    logging_wrapper(self._fit_calibrator, idx, node, len(nodes), pbar)
+                    for idx, node in enumerate(nodes)
+                ]
 
         for calibrator, node in zip(calibrators, nodes):
             self.hierarchy_.nodes[node]["calibrator"] = calibrator
